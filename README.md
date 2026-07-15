@@ -5,7 +5,7 @@
 一个轻量、原生的 macOS Codex 额度监视器。它常驻菜单栏，并提供独立额度窗口，用来查看 5 小时与每周额度、重置时间、Token 活动和消耗趋势。
 
 ![macOS](https://img.shields.io/badge/macOS-13%2B-111827?logo=apple)
-![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
+![Swift](https://img.shields.io/badge/Swift-5.10%2B-F05138?logo=swift&logoColor=white)
 ![Universal 2](https://img.shields.io/badge/Universal_2-Apple_Silicon_%7C_Intel-2563EB)
 ![License](https://img.shields.io/badge/License-MIT-16A34A)
 

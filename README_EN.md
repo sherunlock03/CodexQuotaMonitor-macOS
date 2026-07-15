@@ -5,7 +5,7 @@
 A lightweight, native macOS monitor for Codex usage limits. It lives in the menu bar and provides a standalone dashboard for five-hour and weekly quotas, reset times, token activity, and usage trends.
 
 ![macOS](https://img.shields.io/badge/macOS-13%2B-111827?logo=apple)
-![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
+![Swift](https://img.shields.io/badge/Swift-5.10%2B-F05138?logo=swift&logoColor=white)
 ![Universal 2](https://img.shields.io/badge/Universal_2-Apple_Silicon_%7C_Intel-2563EB)
 ![License](https://img.shields.io/badge/License-MIT-16A34A)
 
