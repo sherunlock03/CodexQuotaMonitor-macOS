@@ -1,0 +1,6 @@
+.build/
+.swiftpm-build/
+dist/
+Resources/AppIcon.iconset/
+.DS_Store
+*.xcuserstate
