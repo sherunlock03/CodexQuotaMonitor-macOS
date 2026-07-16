@@ -383,6 +383,7 @@ private struct TrendSection: View {
 private struct TokenActivityChart: View {
     let values: [DailyTokenUsage]
     let theme: MonitorTheme
+    @State private var hoveredUsageID: DailyTokenUsage.ID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -391,19 +392,41 @@ private struct TokenActivityChart: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(theme.primaryText)
                 Spacer()
-                Text(compact(values.last?.tokens ?? 0))
-                    .font(.caption.monospacedDigit())
+                Text(summaryText)
+                    .font(.caption.monospacedDigit().weight(.medium))
                     .foregroundStyle(theme.secondaryText)
             }
             HStack(alignment: .bottom, spacing: 5) {
                 ForEach(values) { item in
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(item.id == values.last?.id ? theme.accentBlue : theme.accentBlue.opacity(0.48))
-                        .frame(height: barHeight(item.tokens))
-                        .help("\(item.date.formatted(date: .abbreviated, time: .omitted))：\(item.tokens.formatted()) tokens")
+                    ZStack(alignment: .bottom) {
+                        // A nearly transparent fill keeps the entire column in AppKit's
+                        // mouse-tracking region, including days with a very short bar.
+                        Rectangle().fill(Color.primary.opacity(0.001))
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(item.id == activeUsageID
+                                ? theme.accentBlue
+                                : theme.accentBlue.opacity(hoveredUsageID == nil ? 0.48 : 0.24))
+                            .frame(height: barHeight(item.tokens))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 72)
+                    .contentShape(Rectangle())
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active:
+                            hoveredUsageID = item.id
+                        case .ended:
+                            if hoveredUsageID == item.id {
+                                hoveredUsageID = nil
+                            }
+                        }
+                    }
+                    .help(tooltipText(for: item))
+                    .accessibilityLabel(tooltipText(for: item))
                 }
             }
             .frame(height: 72, alignment: .bottom)
+            .animation(.easeOut(duration: 0.12), value: hoveredUsageID)
         }
         .padding(13)
         .background(MonitorCardBackground(theme: theme))
@@ -411,14 +434,39 @@ private struct TokenActivityChart: View {
 
     private var maximum: Int64 { max(1, values.map(\.tokens).max() ?? 1) }
 
+    private var activeUsageID: DailyTokenUsage.ID? {
+        hoveredUsageID ?? values.last?.id
+    }
+
+    private var selectedUsage: DailyTokenUsage? {
+        guard let activeUsageID else { return values.last }
+        return values.first { $0.id == activeUsageID } ?? values.last
+    }
+
+    private var summaryText: String {
+        guard let selectedUsage else { return "--" }
+        return "\(dateLabel(selectedUsage.date)) · \(compactTokens(selectedUsage.tokens))"
+    }
+
     private func barHeight(_ tokens: Int64) -> CGFloat {
         max(3, CGFloat(Double(tokens) / Double(maximum)) * 72)
     }
 
-    private func compact(_ value: Int64) -> String {
-        if value >= 1_000_000 { return String(format: "今日 %.1fM", Double(value) / 1_000_000) }
-        if value >= 1_000 { return String(format: "今日 %.1fK", Double(value) / 1_000) }
-        return "今日 \(value)"
+    private func dateLabel(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "今天" }
+        if calendar.isDateInYesterday(date) { return "昨天" }
+        return date.formatted(.dateTime.month().day())
+    }
+
+    private func compactTokens(_ value: Int64) -> String {
+        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
+        if value >= 1_000 { return String(format: "%.1fK", Double(value) / 1_000) }
+        return value.formatted()
+    }
+
+    private func tooltipText(for item: DailyTokenUsage) -> String {
+        "\(item.date.formatted(date: .long, time: .omitted))：\(item.tokens.formatted()) tokens"
     }
 }
 

@@ -22,6 +22,7 @@ A lightweight, native macOS monitor for Codex usage limits. It lives in the menu
 - Refreshes every 90 seconds with a manual refresh option
 - Estimates hourly burn rate and exhaustion trends from recent samples
 - Aggregates the last 14 days of token activity from local Codex sessions
+- Reveals the date and exact token usage when hovering over any activity bar
 - Falls back to the latest local quota record when the network is unavailable
 - Enforces a single application instance and activates the existing window on relaunch
 - Uses native SwiftUI with no Electron, Node.js, or third-party runtime dependencies
