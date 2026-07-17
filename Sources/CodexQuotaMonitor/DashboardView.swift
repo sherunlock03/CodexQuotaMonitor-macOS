@@ -1,6 +1,12 @@
 import AppKit
 import SwiftUI
 
+private enum QuotaScale {
+    static let warningBoundary = 30.0
+    static let healthyBoundary = 75.0
+    static let boundaries = [warningBoundary, healthyBoundary]
+}
+
 private enum MonitorTheme: String {
     case dark
     case light
@@ -69,14 +75,20 @@ private enum MonitorTheme: String {
             : Color(red: 0.65, green: 0.28, blue: 0.02)
     }
 
+    var quotaSeparator: Color {
+        self == .dark
+            ? Color.white.opacity(0.72)
+            : Color.black.opacity(0.55)
+    }
+
     func quotaAccent(remaining: Double?) -> Color {
         guard let remaining else { return mutedText }
-        if remaining > 75 {
+        if remaining > QuotaScale.healthyBoundary {
             return self == .dark
                 ? Color(red: 0.29, green: 0.87, blue: 0.50)
                 : Color(red: 0.05, green: 0.43, blue: 0.20)
         }
-        if remaining >= 30 {
+        if remaining >= QuotaScale.warningBoundary {
             return self == .dark
                 ? Color(red: 0.99, green: 0.69, blue: 0.32)
                 : Color(red: 0.64, green: 0.27, blue: 0.01)
@@ -90,6 +102,7 @@ private enum MonitorTheme: String {
 struct DashboardView: View {
     @ObservedObject var store: QuotaStore
     @AppStorage("monitorTheme") private var themeRawValue = MonitorTheme.dark.rawValue
+    @State private var isRefreshControlHovered = false
 
     private var theme: MonitorTheme {
         MonitorTheme(rawValue: themeRawValue) ?? .dark
@@ -164,37 +177,52 @@ struct DashboardView: View {
                     .foregroundStyle(theme.secondaryText)
             }
             Spacer(minLength: 6)
-            Menu {
-                Button {
-                    themeRawValue = MonitorTheme.dark.rawValue
-                } label: {
-                    Label("深色", systemImage: theme == .dark ? "checkmark.circle.fill" : "moon.fill")
-                }
-                Button {
-                    themeRawValue = MonitorTheme.light.rawValue
-                } label: {
-                    Label("浅色", systemImage: theme == .light ? "checkmark.circle.fill" : "sun.max.fill")
-                }
-            } label: {
-                Label(theme.title, systemImage: theme.icon)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(theme.primaryText)
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .help("切换深色或浅色外观")
+            ThemeToggle(themeRawValue: $themeRawValue, theme: theme)
 
             Button {
+                isRefreshControlHovered = false
+                NSCursor.arrow.set()
                 Task { await store.refresh() }
             } label: {
                 Image(systemName: "arrow.clockwise")
-                    .foregroundStyle(theme.accentBlue)
+                    .foregroundStyle(isRefreshControlHovered ? theme.primaryText : theme.accentBlue)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        isRefreshControlHovered
+                            ? theme.accentBlue.opacity(theme == .dark ? 0.28 : 0.16)
+                            : theme.track.opacity(theme == .dark ? 0.34 : 0.48),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(
+                                isRefreshControlHovered
+                                    ? theme.accentBlue.opacity(0.58)
+                                    : theme.cardBorder.opacity(0.65),
+                                lineWidth: 1
+                            )
+                    )
+                    .scaleEffect(isRefreshControlHovered ? 1.07 : 1)
+                    .offset(y: isRefreshControlHovered ? -1 : 0)
+                    .animation(.easeOut(duration: 0.12), value: isRefreshControlHovered)
                     .rotationEffect(store.isRefreshing ? .degrees(360) : .zero)
                     .animation(store.isRefreshing ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default, value: store.isRefreshing)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(PressScaleButtonStyle())
             .disabled(store.isRefreshing)
             .help("立即刷新")
+            .onContinuousHover { phase in
+                switch phase {
+                case .active:
+                    if !store.isRefreshing {
+                        isRefreshControlHovered = true
+                        NSCursor.pointingHand.set()
+                    }
+                case .ended:
+                    isRefreshControlHovered = false
+                    NSCursor.arrow.set()
+                }
+            }
         }
     }
 
@@ -258,12 +286,147 @@ struct DashboardView: View {
                     NSWorkspace.shared.open(url)
                 }
             }
-            .buttonStyle(.link)
-            .font(.caption)
+            .buttonStyle(HoverTextButtonStyle(theme: theme, tint: theme.accentBlue))
+            .help("打开 Codex 用量网页")
             Button("退出") { NSApplication.shared.terminate(nil) }
-                .buttonStyle(.link)
-                .font(.caption)
+                .buttonStyle(HoverTextButtonStyle(theme: theme, tint: theme.warning))
+                .help("退出额度监视器")
         }
+    }
+}
+
+private struct ThemeToggle: View {
+    @Binding var themeRawValue: String
+    let theme: MonitorTheme
+    @State private var isHovered = false
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            Capsule()
+                .fill(theme.track.opacity(theme == .dark ? 0.62 : 0.78))
+
+            Capsule()
+                .fill(theme.accentBlue.gradient)
+                .frame(width: 28, height: 24)
+                .offset(x: theme == .light ? 3 : 33)
+                .shadow(color: theme.accentBlue.opacity(0.32), radius: 3, y: 1)
+
+            HStack(spacing: 0) {
+                themeButton(.light, icon: "sun.max.fill", help: "切换到浅色模式")
+                themeButton(.dark, icon: "moon.fill", help: "切换到深色模式")
+            }
+        }
+        .frame(width: 64, height: 30)
+        .overlay(
+            Capsule()
+                .stroke(
+                    isHovered ? theme.accentBlue.opacity(0.70) : theme.cardBorder.opacity(0.72),
+                    lineWidth: isHovered ? 1.5 : 1
+                )
+        )
+        .shadow(
+            color: isHovered ? theme.accentBlue.opacity(theme == .dark ? 0.28 : 0.18) : Color.clear,
+            radius: 5,
+            y: 1
+        )
+        .scaleEffect(isHovered ? 1.06 : 1)
+        .offset(y: isHovered ? -1 : 0)
+        .contentShape(Capsule())
+        .animation(.spring(response: 0.22, dampingFraction: 0.78), value: theme)
+        .animation(.easeOut(duration: 0.14), value: isHovered)
+        .onContinuousHover { phase in
+            switch phase {
+            case .active:
+                isHovered = true
+                NSCursor.pointingHand.set()
+            case .ended:
+                isHovered = false
+                NSCursor.arrow.set()
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("外观模式")
+    }
+
+    private func themeButton(_ target: MonitorTheme, icon: String, help: String) -> some View {
+        Button {
+            themeRawValue = target.rawValue
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(theme == target ? Color.white : theme.mutedText)
+                .frame(width: 30, height: 30)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(ThemeSegmentButtonStyle())
+        .help(help)
+        .accessibilityLabel(target == .light ? "浅色模式" : "深色模式")
+        .accessibilityValue(theme == target ? "已选择" : "未选择")
+    }
+}
+
+private struct ThemeSegmentButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.82 : 1)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+    }
+}
+
+private struct PressScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.92 : 1)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+    }
+}
+
+private struct HoverTextButtonStyle: ButtonStyle {
+    let theme: MonitorTheme
+    let tint: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        HoverTextButtonBody(configuration: configuration, theme: theme, tint: tint)
+    }
+}
+
+private struct HoverTextButtonBody: View {
+    let configuration: ButtonStyle.Configuration
+    let theme: MonitorTheme
+    let tint: Color
+    @State private var isHovered = false
+
+    var body: some View {
+        configuration.label
+            .font(.caption.weight(isHovered ? .semibold : .medium))
+            .foregroundStyle(isHovered ? tint : theme.secondaryText)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(
+                isHovered
+                    ? tint.opacity(theme == .dark ? 0.28 : 0.17)
+                    : Color.primary.opacity(0.001),
+                in: Capsule()
+            )
+            .overlay(
+                Capsule()
+                    .stroke(isHovered ? tint.opacity(0.62) : Color.clear, lineWidth: 1)
+            )
+            .contentShape(Capsule())
+            .scaleEffect(configuration.isPressed ? 0.95 : (isHovered ? 1.05 : 1))
+            .offset(y: isHovered && !configuration.isPressed ? -1 : 0)
+            .animation(.easeOut(duration: 0.14), value: isHovered)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+            .onContinuousHover { phase in
+                switch phase {
+                case .active:
+                    isHovered = true
+                    NSCursor.pointingHand.set()
+                case .ended:
+                    isHovered = false
+                    NSCursor.arrow.set()
+                }
+            }
     }
 }
 
@@ -304,6 +467,16 @@ private struct QuotaCard: View {
                     Capsule()
                         .fill(accent.gradient)
                         .frame(width: proxy.size.width * CGFloat((window?.remainingPercent ?? 0) / 100))
+                    ForEach(QuotaScale.boundaries, id: \.self) { boundary in
+                        Rectangle()
+                            .fill(theme.quotaSeparator)
+                            .frame(width: 1.5, height: proxy.size.height)
+                            .position(
+                                x: proxy.size.width * CGFloat(boundary / 100),
+                                y: proxy.size.height / 2
+                            )
+                            .allowsHitTesting(false)
+                    }
                 }
             }
             .frame(height: 8)
